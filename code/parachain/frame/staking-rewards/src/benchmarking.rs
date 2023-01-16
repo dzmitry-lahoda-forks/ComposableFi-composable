@@ -14,7 +14,6 @@ use composable_traits::{
 };
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
-	bounded_btree_map,
 	traits::{fungibles::Mutate, Get, OriginTrait, TryCollect, UnixTime},
 	BoundedBTreeMap,
 };
@@ -50,7 +49,7 @@ fn get_reward_pool<T: Config>(
 
 fn lock_config<T: Config>() -> LockConfig<T::MaxStakingDurationPresets> {
 	LockConfig {
-		duration_multipliers: bounded_btree_map! {
+		duration_multipliers: frame_support::bounded_btree_map! {
 			// 1%
 			ONE_HOUR => FixedU64::from_rational(101, 100)
 				.try_into_validated()
