@@ -508,19 +508,21 @@ pub mod pallet {
 			start_block: T::BlockNumber::zero(),
 			end_block: T::BlockNumber::zero(),
 			lock: LockConfig {
-				duration_presets: [
-					(
-						ONE_WEEK,
-						FixedU64::from_rational(101, 100).try_into_validated().expect(">= 1"),
-					),
-					(
-						ONE_MONTH,
-						FixedU64::from_rational(110, 100).try_into_validated().expect(">= 1"),
-					),
-				]
-				.into_iter()
-				.try_collect()
-				.expect("Genesis config must be correct; qed"),
+				duration_multipliers: lock::DurationMultipliers::Presets(
+					[
+						(
+							ONE_WEEK,
+							FixedU64::from_rational(101, 100).try_into_validated().expect(">= 1"),
+						),
+						(
+							ONE_MONTH,
+							FixedU64::from_rational(110, 100).try_into_validated().expect(">= 1"),
+						),
+					]
+					.into_iter()
+					.try_collect()
+					.expect("Genesis config must be correct; qed"),
+				),
 				unlock_penalty: Default::default(),
 			},
 			share_asset_id,
@@ -737,7 +739,10 @@ pub mod pallet {
 						Error::<T>::RewardsPoolAlreadyExists
 					);
 
-					ensure!(lock.duration_presets.len() > 0, Error::<T>::NoDurationPresetsProvided);
+					ensure!(
+						lock.duration_multipliers.has_at_least_one_valid_duration(),
+						Error::<T>::NoDurationPresetsProvided
+					);
 
 					let now_seconds = T::UnixTime::now().as_secs();
 
@@ -946,8 +951,8 @@ pub mod pallet {
 					// creation.
 					let reward_multiplier = rewards_pool
 						.lock
-						.duration_presets
-						.get(&stake.lock.duration)
+						.duration_multipliers
+						.multiplier(stake.lock.duration)
 						.copied()
 						.defensive_unwrap_or_else(|| {
 							FixedU64::one().try_into_validated().expect("1 is >= 1")
@@ -1415,7 +1420,7 @@ pub mod pallet {
 			rewards_pool: &RewardPoolOf<T>,
 			duration_preset: DurationSeconds,
 		) -> Option<Validated<FixedU64, GeOne>> {
-			rewards_pool.lock.duration_presets.get(&duration_preset).cloned()
+			rewards_pool.lock.duration_multipliers.multiplier(duration_preset).cloned()
 		}
 
 		pub(crate) fn boosted_amount(

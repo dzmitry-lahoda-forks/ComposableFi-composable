@@ -87,15 +87,11 @@ fn duration_presets_minimum_is_1() {
 				end_block: 5,
 				reward_configs: default_reward_config(),
 				lock: LockConfig {
-					duration_presets: [
-						(
-							ONE_MINUTE,
-							FixedU64::from_rational(110, 100).try_into_validated().expect(">= 1")
-						), // 0.1%
-					]
-					.into_iter()
-					.try_collect()
-					.unwrap(),
+					duration_multipliers: bounded_btree_map! {
+						// 0.1%
+						ONE_MINUTE => FixedU64::from_rational(110, 100).try_into_validated().expect(">= 1"),
+					}
+					.into(),
 					unlock_penalty: Perbill::from_percent(5),
 				},
 				share_asset_id: XPICA::ID,
@@ -120,10 +116,10 @@ fn zero_length_duration_preset_works() {
 				end_block: 5,
 				reward_configs: default_reward_config(),
 				lock: LockConfig {
-					duration_presets: [(0, FixedU64::one().try_into_validated().expect(">= 1")),]
-						.into_iter()
-						.try_collect()
-						.unwrap(),
+					duration_multipliers: bounded_btree_map! {
+						0 => FixedU64::one().try_into_validated().expect(">= 1"),
+					}
+					.into(),
 					unlock_penalty: Perbill::from_percent(5),
 				},
 				share_asset_id: XPICA::ID,
@@ -201,23 +197,17 @@ fn create_staking_reward_pool_should_fail_when_slashed_amount_is_less_than_exist
 					end_block: 5,
 					reward_configs: default_reward_config(),
 					lock: LockConfig {
-						duration_presets: [
-							(
-								ONE_HOUR,
-								FixedU64::from_rational(101, 100)
-									.try_into_validated()
-									.expect(">= 1")
-							), // 1%
-							(
-								ONE_MINUTE,
-								FixedU64::from_rational(1_001, 1_000)
-									.try_into_validated()
-									.expect(">= 1")
-							), // 0.1%
-						]
-						.into_iter()
-						.try_collect()
-						.unwrap(),
+						duration_multipliers: bounded_btree_map! {
+							// 1%
+							ONE_HOUR => FixedU64::from_rational(101, 100)
+								.try_into_validated()
+								.expect(">= 1"),
+							// 0.1%
+							ONE_MINUTE => FixedU64::from_rational(1_001, 1_000)
+								.try_into_validated()
+								.expect(">= 1"),
+						}
+						.into(),
 						unlock_penalty: Perbill::from_percent(99),
 					},
 					share_asset_id: XPICA::ID,
@@ -246,23 +236,17 @@ fn create_staking_reward_pool_should_fail_when_slashed_minimum_amount_is_less_th
 					end_block: 5,
 					reward_configs: default_reward_config(),
 					lock: LockConfig {
-						duration_presets: [
-							(
-								ONE_HOUR,
-								FixedU64::from_rational(101, 100)
-									.try_into_validated()
-									.expect("valid reward multiplier")
-							), // 1%
-							(
-								ONE_MINUTE,
-								FixedU64::from_rational(11, 10)
-									.try_into_validated()
-									.expect("valid reward multiplier")
-							), // 0.1%
-						]
-						.into_iter()
-						.try_collect()
-						.unwrap(),
+						duration_multipliers: bounded_btree_map! {
+							// 1%
+							ONE_HOUR => FixedU64::from_rational(101, 100)
+								.try_into_validated()
+								.expect(">= 1"),
+							// 0.1%
+							ONE_MINUTE => FixedU64::from_rational(1_001, 1_000)
+								.try_into_validated()
+								.expect(">= 1"),
+						}
+						.into(),
 						unlock_penalty: Perbill::from_percent(60),
 					},
 					share_asset_id: XPICA::ID,
@@ -678,7 +662,7 @@ mod extend {
 		},
 		time::{ONE_HOUR, ONE_MINUTE},
 	};
-	use frame_support::traits::UnixTime;
+	use frame_support::{bounded_btree_map, traits::UnixTime};
 	use sp_arithmetic::fixed_point::FixedU64;
 	use sp_runtime::Perbill;
 
@@ -718,20 +702,17 @@ mod extend {
 						RewardConfig { reward_rate: RewardRate::per_second(USDT::units(1)) },
 					)]),
 					lock: LockConfig {
-						duration_presets: btree_map([
-							(
-								ONE_MINUTE,
-								FixedU64::from_rational(1_001, 1_000)
-									.try_into_validated()
-									.expect(">= 1"),
-							), /* 1% */
-							(
-								ONE_HOUR,
-								FixedU64::from_rational(101, 100)
-									.try_into_validated()
-									.expect(">= 1"),
-							), /* 0.1% */
-						]),
+						duration_multipliers: bounded_btree_map! {
+							// 1%
+							ONE_HOUR => FixedU64::from_rational(101, 100)
+								.try_into_validated()
+								.expect(">= 1"),
+							// 0.1%
+							ONE_MINUTE => FixedU64::from_rational(1_001, 1_000)
+								.try_into_validated()
+								.expect(">= 1"),
+						}
+						.into(),
 						unlock_penalty: Perbill::from_percent(5),
 					},
 					share_asset_id: XPICA::ID,
@@ -800,7 +781,12 @@ mod extend {
 					reward_pool_id: STAKED_ASSET::ID,
 					stake: staked_amount + extended_amount,
 					share: Pallet::<Test>::boosted_amount(
-						rewards_pool.lock.duration_presets[&ONE_MINUTE],
+						rewards_pool
+							.lock
+							.duration_multipliers
+							.multiplier(ONE_MINUTE)
+							.copied()
+							.unwrap(),
 						staked_amount + extended_amount
 					)
 					.expect("boosted amount calculation should not fail"),
@@ -838,20 +824,17 @@ mod extend {
 						RewardConfig { reward_rate: RewardRate::per_second(USDT::units(1)) },
 					)]),
 					lock: LockConfig {
-						duration_presets: btree_map([
-							(
-								ONE_MINUTE,
-								FixedU64::from_rational(1_001, 1_000)
-									.try_into_validated()
-									.expect(">= 1"),
-							), /* 1% */
-							(
-								ONE_HOUR,
-								FixedU64::from_rational(101, 100)
-									.try_into_validated()
-									.expect(">= 1"),
-							), /* 0.1% */
-						]),
+						duration_multipliers: bounded_btree_map! {
+							// 1%
+							ONE_HOUR => FixedU64::from_rational(101, 100)
+								.try_into_validated()
+								.expect(">= 1"),
+							// 0.1%
+							ONE_MINUTE => FixedU64::from_rational(1_001, 1_000)
+								.try_into_validated()
+								.expect(">= 1"),
+						}
+						.into(),
 						unlock_penalty: Perbill::from_percent(5),
 					},
 					share_asset_id: XPICA::ID,
@@ -915,7 +898,12 @@ mod extend {
 					reward_pool_id: STAKED_ASSET::ID,
 					stake: staked_amount + extended_amount,
 					share: Pallet::<Test>::boosted_amount(
-						rewards_pool.lock.duration_presets[&ONE_MINUTE],
+						rewards_pool
+							.lock
+							.duration_multipliers
+							.multiplier(ONE_MINUTE)
+							.copied()
+							.unwrap(),
 						staked_amount + extended_amount
 					)
 					.expect("boosted amount calculation should not fail"),
@@ -1337,10 +1325,11 @@ fn claim_with_insufficient_pot_funds() {
 				}
 			},
 			lock: LockConfig {
-				duration_presets: bounded_btree_map! {
+				duration_multipliers: bounded_btree_map! {
 					ONE_HOUR => FixedU64::from_rational(101, 100).try_into_validated().expect(">= 1"), /* 1% */
 					ONE_MINUTE => FixedU64::from_rational(1_001, 1_000).try_into_validated().expect(">= 1"), /* 0.1% */
-				},
+				}
+				.into(),
 				unlock_penalty: Perbill::from_percent(5),
 			},
 			share_asset_id: XPICA::ID,
@@ -1380,7 +1369,11 @@ fn claim_with_insufficient_pot_funds() {
 
 		// bob claims their whole amount, which will be some portion of the unlocked rewards
 		Test::assert_extrinsic_event(
-			Pallet::<Test>::claim(Origin::signed(BOB), STAKING_FNFT_COLLECTION_ID, bob_stake_id),
+			Pallet::<Test>::claim(
+				RuntimeOrigin::signed(BOB),
+				STAKING_FNFT_COLLECTION_ID,
+				bob_stake_id,
+			),
 			crate::Event::<Test>::Claimed {
 				owner: BOB,
 				fnft_collection_id: STAKING_FNFT_COLLECTION_ID,
@@ -1389,7 +1382,11 @@ fn claim_with_insufficient_pot_funds() {
 		);
 
 		Test::assert_extrinsic_event(
-			Pallet::<Test>::claim(Origin::signed(DAVE), STAKING_FNFT_COLLECTION_ID, dave_stake_id),
+			Pallet::<Test>::claim(
+				RuntimeOrigin::signed(DAVE),
+				STAKING_FNFT_COLLECTION_ID,
+				dave_stake_id,
+			),
 			crate::Event::<Test>::Claimed {
 				owner: DAVE,
 				fnft_collection_id: STAKING_FNFT_COLLECTION_ID,
@@ -1766,7 +1763,7 @@ fn duration_presets_are_required() {
 					end_block: 5,
 					reward_configs: default_reward_config(),
 					lock: LockConfig {
-						duration_presets: BoundedBTreeMap::new(),
+						duration_multipliers: BoundedBTreeMap::new().into(),
 						unlock_penalty: Perbill::from_percent(5),
 					},
 					share_asset_id: XPICA::ID,
@@ -2112,10 +2109,17 @@ fn get_default_reward_pool() -> RewardPoolConfigurationOf<Test> {
 
 fn default_lock_config() -> LockConfig<MaxStakingDurationPresets> {
 	LockConfig {
-		duration_presets: bounded_btree_map! {
-			ONE_HOUR => FixedU64::from_rational(101, 100).try_into_validated().expect(">= 1"), /* 1% */
-			ONE_MINUTE => FixedU64::from_rational(1_001, 1_000).try_into_validated().expect(">= 1"), /* 0.1% */
-		},
+		duration_multipliers: bounded_btree_map! {
+			// 1%
+			ONE_HOUR => FixedU64::from_rational(101, 100)
+				.try_into_validated()
+				.expect(">= 1"),
+			// 0.1%
+			ONE_MINUTE => FixedU64::from_rational(1_001, 1_000)
+				.try_into_validated()
+				.expect(">= 1"),
+		}
+		.into(),
 		unlock_penalty: Perbill::from_percent(5),
 	}
 }
