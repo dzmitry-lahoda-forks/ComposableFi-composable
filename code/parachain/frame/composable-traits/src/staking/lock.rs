@@ -22,7 +22,7 @@ pub struct LockConfig<MaxDurationPresets: Get<u32>> {
 	pub unlock_penalty: Perbill,
 }
 
-/// Represents both valid staking lock durations and ther associated multiplier bonus.
+/// Represents both valid staking lock durations and ther associated share multiplier bonus.
 #[derive(
 	DebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound, MaxEncodedLen, Encode, Decode, TypeInfo,
 )]
