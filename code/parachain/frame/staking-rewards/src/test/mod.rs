@@ -2167,3 +2167,87 @@ fn btree_map<K: Ord, V, Max: sp_runtime::traits::Get<u32>>(
 ) -> BoundedBTreeMap<K, V, Max> {
 	iter.into_iter().collect::<BTreeMap<K, V>>().try_into().unwrap()
 }
+
+#[test]
+fn zero_penalty_early_unlock() {
+	new_test_ext().execute_with(|| {
+		next_block::<StakingRewards, Test>();
+
+		create_rewards_pool_and_assert::<Test>(RewardRateBasedIncentive {
+			owner: ALICE,
+			asset_id: PICA::ID,
+			start_block: 3,
+			end_block: 100_000,
+			reward_configs: bounded_btree_map! {
+				BTC::ID => RewardConfig { reward_rate: RewardRate::per_second(0_u128) }
+			},
+			lock: LockConfig {
+				duration_multipliers: bounded_btree_map! {
+					// 0 => FixedU64::one().try_into_validated().expect("1 >= 1")
+					ONE_HOUR => FixedU64::one().try_into_validated().expect("1 >= 1")
+				}
+				.into(),
+				unlock_penalty: Perbill::zero(),
+			},
+			share_asset_id: XPICA::ID,
+			financial_nft_asset_id: STAKING_FNFT_COLLECTION_ID,
+			minimum_staking_amount: 100_000,
+		});
+
+		mint_assets([ALICE], [BTC::ID], BTC::units(100));
+		add_to_rewards_pot_and_assert::<Test>(ALICE, PICA::ID, BTC::ID, BTC::units(100), false);
+
+		process_and_progress_blocks::<StakingRewards, Test>(2);
+
+		mint_assets([BOB], [PICA::ID], PICA::units(10));
+		let stake_id = stake_and_assert::<Test>(BOB, PICA::ID, PICA::units(1), ONE_HOUR);
+
+		next_block::<StakingRewards, Test>();
+
+		unstake_and_assert::<Test>(BOB, STAKING_FNFT_COLLECTION_ID, stake_id, true);
+	})
+}
+
+#[test]
+fn zero_penalty_no_multiplier_doesnt_slash() {
+	new_test_ext().execute_with(|| {
+		next_block::<StakingRewards, Test>();
+
+		create_rewards_pool_and_assert::<Test>(RewardRateBasedIncentive {
+			owner: ALICE,
+			asset_id: PICA::ID,
+			start_block: 3,
+			end_block: 100_000,
+			reward_configs: bounded_btree_map! {
+				BTC::ID => RewardConfig { reward_rate: RewardRate::per_second(0_u128) }
+			},
+			lock: LockConfig {
+				duration_multipliers: bounded_btree_map! {
+					0 => FixedU64::one().try_into_validated().expect("1 >= 1")
+				}
+				.into(),
+				unlock_penalty: Perbill::zero(),
+			},
+			share_asset_id: XPICA::ID,
+			financial_nft_asset_id: STAKING_FNFT_COLLECTION_ID,
+			minimum_staking_amount: 100_000,
+		});
+
+		mint_assets([ALICE], [BTC::ID], BTC::units(100));
+		add_to_rewards_pot_and_assert::<Test>(ALICE, PICA::ID, BTC::ID, BTC::units(100), false);
+
+		process_and_progress_blocks::<StakingRewards, Test>(2);
+
+		mint_assets([BOB], [PICA::ID], PICA::units(10));
+		let stake_id = stake_and_assert::<Test>(BOB, PICA::ID, PICA::units(1), 0);
+
+		next_block::<StakingRewards, Test>();
+
+		unstake_and_assert::<Test>(
+			BOB,
+			STAKING_FNFT_COLLECTION_ID,
+			stake_id,
+			false, // shouldn't be an early unlock since the lock period is 0
+		);
+	})
+}
